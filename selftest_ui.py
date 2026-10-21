@@ -76,10 +76,15 @@ check(f"选中的是第 2 张（{target.key}）", g.upgrades.level_of(target.key
 check("升级计数 +1", g._upgrade_count == 1, f"(实际 {g._upgrade_count})")
 check("选择界面已关闭", g.upgrade_screen is None)
 
-# 第二次触发：阈值变成 2 倍
-g.stats.score = base * 2
+# 第二次触发：门槛按 base×n×(n+1)÷2 算，n=2 → 3×base = 1200
+second_needed = base * 2 * 3 // 2
+g.stats.score = second_needed
 g._check_upgrade_threshold()
-check(f"第 2 次需要 {base * 2} 分 -> 已经够了", g.state is State.UPGRADING)
+check(
+    f"第 2 次需要 {second_needed} 分 -> 已经够了",
+    g.state is State.UPGRADING,
+    f"(state={g.state.name})",
+)
 
 before = g.upgrade_screen.index
 press(g, pygame.K_RIGHT)
@@ -105,7 +110,19 @@ print()
 print("=" * 62)
 print("③ 鼠标点卡")
 print("=" * 62)
-g.stats.score = base * 3
+
+
+def needed_to_pop(g):
+    """下一次升级要多少分（照抄 _check_upgrade_threshold 的算法）。
+
+    测试里必须用同一个公式，不能写死 800 / 1200 —— 门槛规则一改，
+    写死的数字就会变成"看起来在测、其实测的是别的东西"。
+    """
+    n = g._upgrade_count + 1
+    return g.settings.upgrade_score_base * n * (n + 1) // 2
+
+
+g.stats.score = needed_to_pop(g)
 g._check_upgrade_threshold()
 rect = g.upgrade_screen.rects[0]
 clicked = g.upgrade_screen.choices[0]
@@ -116,7 +133,7 @@ check("点第 1 张卡 -> 选中的就是它", g.upgrades.level_of(clicked.key) 
 check("状态回到 PLAYING", g.state is State.PLAYING)
 
 # 点在卡片外面不应该选走
-g.stats.score = base * 4
+g.stats.score = needed_to_pop(g)
 g._check_upgrade_threshold()
 pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(5, 5), button=1))
 g.input.begin_frame()

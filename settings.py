@@ -10,11 +10,18 @@ class Settings:
         self.bg_color = (230, 230, 230)
 
         self.fleet_drop_speed = 10
-        self.speedup_scale = 1.1
-        self.score_scale = 1.5
 
-        # 分数触发三选一：第 n 次升级需要累积分 >= base * n
-        # （400, 800, 1200 ...）
+        # 【难度固定】清完一批外星人**不再加速**、也**不再涨分**。
+        # 以前这里有 speedup_scale / score_scale：每清一批速度 ×1.1、分值 ×1.5。
+        # 试玩之后的结论是：分值 ×1.5 涨得太快，几张卡轻易就到手，
+        # 而速度 ×1.1 又让后期变得手忙脚乱 —— 两头都不对。
+        # 现在难度只由 fleet_drop_speed（整队往下压的速度）决定。
+
+        # 升级门槛：第 n 次升级需要的【累计】分数 = base × n × (n+1) ÷ 2
+        #   n=1 → 400    n=2 → 1200    n=3 → 2400    n=4 → 4000
+        # 换成人话：第 1 次差 400 分，第 2 次再差 800 分，第 3 次再差 1200 分……
+        # **每一次都比上一次更贵**，所以越到后面升级越难得。
+        # （以前是固定每次+400：400/800/1200，后期升级会像白送）
         self.upgrade_score_base = 400
 
         # 进化成功的提示条显示多少帧（60 帧 = 1 秒）→ 150 帧 ≈ 2.5 秒
@@ -54,10 +61,6 @@ class Settings:
         self.alien_speed = 1.0
         self.fleet_direction = 1
 
-        # 分值倍率：每个外星人自己带基础分（见 alien.py 的 ALIEN_TYPES），
-        # 难度上来了就整体放大。1.0 = 原始分值
-        self.points_multiplier = 1.0
-
         # ---- 会被升级改动的项 ----
         self.bullets_allowed = 20  # MAGAZINE 会加
         self.ship_limit = 3  # EXTRA LIFE 会加
@@ -65,10 +68,3 @@ class Settings:
         self.bullets_pierce = False  # PHASE PIERCE
         self.auto_fire = False  # AUTO FIRE
         self.psionic_radius = 0  # PSIONIC STORM（0 = 没这个升级）
-
-    def increase_speed(self):
-        self.ship_speed *= self.speedup_scale
-        self.bullet_speed *= self.speedup_scale
-        self.alien_speed *= self.speedup_scale
-
-        self.points_multiplier *= self.score_scale

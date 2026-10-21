@@ -217,9 +217,7 @@ class AlienInvasion:
             # （那样一枪打中两个不同价的外星人，会按同一个价算两遍）
             for hit_aliens in collisions.values():
                 for alien in hit_aliens:
-                    self.stats.score += int(
-                        alien.points * self.settings.points_multiplier
-                    )
+                    self.stats.score += alien.points
                     # 【神族】灵能风暴：击落它时把周围一圈也炸掉
                     if self.settings.psionic_radius:
                         self._psionic_storm(alien)
@@ -227,9 +225,11 @@ class AlienInvasion:
             self.sb.check_high_score()
             self._check_upgrade_threshold()
         if not self.aliens:
+            # 【难度固定】只换一批新的，不加速、不涨分。
+            # 变化的是"升级要多少分"（见 _check_upgrade_threshold），
+            # 而不是"外星人越来越难打"。
             self.bullets.empty()
             self._create_fleet()
-            self.settings.increase_speed()
 
             self.stats.level += 1
             self.sb.prep_level()
@@ -245,7 +245,7 @@ class AlienInvasion:
         area = center.rect.inflate(radius * 2, radius * 2)
         for victim in self.aliens.sprites():
             if area.colliderect(victim.rect):
-                self.stats.score += int(victim.points * self.settings.points_multiplier)
+                self.stats.score += victim.points
                 victim.kill()
 
     def _update_screen(self):
@@ -280,12 +280,18 @@ class AlienInvasion:
     def _check_upgrade_threshold(self):
         """累积分够就弹三选一。
 
-        第 n 次升级需要 score >= base * n（400, 800, 1200 ...）。
-        不在阈值里存“下次多少分”，而是用计数现算 —— 少一份状态就少一类 bug。
+        第 n 次升级需要 score >= base × n × (n+1) ÷ 2
+            n=1 → 400    n=2 → 1200    n=3 → 2400    n=4 → 4000
+        意思是：第 1 次差 400 分，第 2 次再差 800 分，第 3 次再差 1200 分……
+        **每一次都比上一次更贵**，所以升级会越来越慢 —— 这是"难度固定"
+        之后唯一还在变强的东西，也是拉长一局的主要因素。
+
+        不在阈值里存"下次多少分"，而是用计数现算 —— 少一份状态就少一类 bug。
         """
         if self.state is not State.PLAYING:
             return
-        needed = self.settings.upgrade_score_base * (self._upgrade_count + 1)
+        n = self._upgrade_count + 1
+        needed = self.settings.upgrade_score_base * n * (n + 1) // 2
         if self.stats.score >= needed:
             self._begin_upgrade()
 

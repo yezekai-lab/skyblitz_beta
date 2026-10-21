@@ -146,7 +146,7 @@ target = list(g.aliens)[0]
 target.rect.x = g.ship.rect.centerx
 target.rect.y = g.ship.rect.top - 40
 target.x = float(target.rect.x)
-expected_points = int(target.points * g.settings.points_multiplier)
+expected_points = target.points
 g._fire_bullet()
 for i in range(60):
     g._update_bullets()
@@ -167,9 +167,19 @@ check(
     FLEET_MIN <= len(g.aliens) <= FLEET_MAX,
     f"(实际 {len(g.aliens)})",
 )
-check("等级 +1", g.stats.level == 2, f"(实际 {g.stats.level})")
-check("难度提升：alien_speed 变 1.1", round(g.settings.alien_speed, 3) == 1.1)
-check("难度提升：分值倍率变 1.5", g.settings.points_multiplier == 1.5)
+check("等级 +1（记下打完了第几批）", g.stats.level == 2, f"(实际 {g.stats.level})")
+# 【难度固定】打完一批**不该**让外星人更快 —— 这是试玩后改的：
+# 以前每批 ×1.1，玩家后期手忙脚乱。
+check(
+    "难度不变：外星人速度仍是 1.0",
+    g.settings.alien_speed == 1.0,
+    f"(实际 {g.settings.alien_speed})",
+)
+check(
+    "分值不涨：灰外星人还是 50 分",
+    ALIEN_TYPES[0]["points"] == 50,
+    f"(实际 {ALIEN_TYPES[0]['points']})",
+)
 check("重建后子弹被清空", len(g.bullets) == 0)
 
 print()
@@ -381,7 +391,6 @@ check(
 
 print()
 print("-- 计分：一枪打中两个不同分值的外星人 --")
-g.settings.points_multiplier = 1.0
 g.stats.score = 0
 g.bullets.empty()
 g.aliens.empty()
@@ -404,22 +413,61 @@ check(
 )
 
 print()
-print("-- 计分：难度倍率 --")
-g.settings.points_multiplier = 1.5
-g.stats.score = 0
-g.bullets.empty()
-g.aliens.empty()
-one = Alien(g)
-one.points = 100
-one.rect.x = g.ship.rect.centerx
-one.rect.y = g.ship.rect.top - 40
-one.x = float(one.rect.x)
-g.aliens.add(one)
-g._fire_bullet()
-g._update_bullets()
+print("-- 计分：一枪两个不同分值的已经验过了，这里验『升级门槛越来越贵』--")
+
+# 【试玩反馈】难度固定之后，唯一还在变强的就是升级 —— 所以它必须越来越贵。
+# 规则：第 n 次升级需要的累计分 = base × n × (n+1) ÷ 2
+#   n=1 → 400   n=2 → 1200   n=3 → 2400   n=4 → 4000
+# 断言用"关系"而不是写死 400/1200/2400：
+#   ① 每次之间的差额严格递增（这就是"越来越贵"）
+#   ② 第 1 次等于 base（保证开局别太难）
+g.base = g.settings.upgrade_score_base
+
+
+def needed_for(n):
+    """照抄 _check_upgrade_threshold 里的算法，用来算"第 n 次要多少分"。"""
+    return g.base * n * (n + 1) // 2
+
+
+gaps = [needed_for(n + 1) - needed_for(n) for n in range(1, 6)]
 check(
-    "倍率 1.5 时打 100 分外星人得 150", g.stats.score == 150, f"(实际 {g.stats.score})"
+    "升级间隔严格递增（第 n 次比第 n-1 次多要 base 分）",
+    all(gaps[i] < gaps[i + 1] for i in range(len(gaps) - 1)),
+    f"(间隔: {gaps})",
 )
+check(
+    "第 1 次升级只要 base 分（开局不至于卡住）",
+    needed_for(1) == g.base,
+    f"(实际 {needed_for(1)})",
+)
+check(
+    "第 4 次门槛已接近第 1 次的 10 倍",
+    needed_for(4) >= g.base * 9,
+    f"(第 4 次 {needed_for(4)}，第 1 次 {needed_for(1)})",
+)
+
+# 反过来验一次真实代码：把分数摆到"第 5 次刚好不够"，不该弹窗
+g._upgrade_count = 4
+g.stats.score = needed_for(5) - 1
+g.state = m.State.PLAYING
+g.upgrade_screen = None
+g._check_upgrade_threshold()
+check(
+    "差 1 分时不该弹升级界面",
+    g.upgrade_screen is None and g.state is m.State.PLAYING,
+    f"(state={g.state.name})",
+)
+g.stats.score = needed_for(5)
+g._check_upgrade_threshold()
+check(
+    "刚好够分时弹出升级界面",
+    g.state is m.State.UPGRADING,
+    f"(state={g.state.name})",
+)
+g.state = m.State.PLAYING
+g.upgrade_screen = None
+g._upgrade_count = 0
+g.stats.score = 0
 
 print()
 print("=" * 62)
@@ -786,7 +834,6 @@ def storm_scene(radius):
     gg.aliens.empty()
     gg.settings.psionic_radius = radius
     gg.settings.bullets_per_shot = 1
-    gg.settings.points_multiplier = 1.0
     gg.stats.score = 0
 
     target = Alien(gg)
@@ -854,7 +901,6 @@ WATCH = [
     "ship_speed",
     "bullet_speed",
     "alien_speed",
-    "points_multiplier",
     "bullets_allowed",
     "ship_limit",
     "bullets_per_shot",
