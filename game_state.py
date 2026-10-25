@@ -19,6 +19,7 @@ class State(Enum):
     PAUSED = auto()  # 玩家按了暂停
     UPGRADING = auto()  # 弹出三选一，等玩家挑升级（第 ④ 项才会用到）
     GAME_OVER = auto()  # 命数用完
+    QUIT_CONFIRM = auto()  # 按了 ESC，正问"真的要退出吗"
 
     @property
     def world_moves(self):

@@ -17,6 +17,8 @@ PAD_MOVE_AXIS = 0  # 左摇杆 X（-1 左 ~ +1 右）
 PAD_MOVE_HAT = 0  # 方向键帽（左右为 -1 / 0 / +1）
 PAD_FIRE_BUTTON = 0  # A 键
 PAD_PAUSE_BUTTON = 7  # Start 键
+PAD_BACK_BUTTON = 1  # B 键（"返回 / 取消"）
+PAD_YES_BUTTON = 3  # Y 键（确认退出时用）
 
 
 class InputManager:
@@ -42,6 +44,10 @@ class InputManager:
         self.confirm_pressed = False
         self.fire_pressed = False
         self.pause_pressed = False
+        # 退出确认用：ESC / B = 想退出（或取消），Y = "是的，退吧"，N = "不"
+        self.escape_pressed = False
+        self.yes_pressed = False
+        self.no_pressed = False
 
         # 键盘是离散事件，必须自己记住「现在还按着没有」
         self._key_left = False
@@ -128,6 +134,12 @@ class InputManager:
             self.confirm_pressed = True
         elif key == pygame.K_p:
             self.pause_pressed = True
+        elif key == pygame.K_ESCAPE:
+            self.escape_pressed = True
+        elif key == pygame.K_y:
+            self.yes_pressed = True
+        elif key == pygame.K_n:
+            self.no_pressed = True
 
     def _handle_keyup(self, key):
         if key == pygame.K_RIGHT:
@@ -145,6 +157,11 @@ class InputManager:
             self._pad_fire = True
         elif button == PAD_PAUSE_BUTTON:
             self.pause_pressed = True
+        elif button == PAD_BACK_BUTTON:
+            # B 键 = "返回 / 取消"，和键盘 ESC 一个意思
+            self.escape_pressed = True
+        elif button == PAD_YES_BUTTON:
+            self.yes_pressed = True
 
     # ------------------------------------------------------------------
     # 每帧开头调用一次：清掉上一帧的「按下」标记
@@ -157,6 +174,9 @@ class InputManager:
         self.confirm_pressed = False
         self.fire_pressed = False
         self.pause_pressed = False
+        self.escape_pressed = False
+        self.yes_pressed = False
+        self.no_pressed = False
         self.menu_left_pressed = False
         self.menu_right_pressed = False
         self.choice_pressed = None

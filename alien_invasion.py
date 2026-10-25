@@ -27,6 +27,18 @@ class AlienInvasion:
         self.input = InputManager()
         self.stats = GameStats(self)
         self.upgrades = UpgradePool(self)
+
+        # 阶段与升级计数要**先于 Scoreboard** 就位：
+        # Scoreboard 一建好就会渲染一次 HUD，而 HUD 里要读 _upgrade_count
+        # （算"还差多少分升级"）。顺序反了就是 AttributeError。
+        self.state = State.READY
+        self.upgrade_screen = None
+        self._upgrade_count = 0
+        # 进化提示条还剩几帧（0 = 不显示）
+        self.evolution_timer = 0
+        # 按 ESC 前处于哪个状态 —— 取消退出时要退回到它
+        self._state_before_quit = None
+
         self.sb = Scoreboard(self)
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
@@ -36,24 +48,19 @@ class AlienInvasion:
         # 帧率时钟。**没有它，游戏速度就取决于电脑有多快**
         self.clock = pygame.time.Clock()
 
-        # 当前处于哪个阶段。开一局、暂停、结束全都是改这一个值
-        self.state = State.READY
-        self.upgrade_screen = None
-        self._upgrade_count = 0
-        # 进化提示条还剩几帧（0 = 不显示）
-        self.evolution_timer = 0
-
         # 暂停时压在画面上的半透明黑幕。只建一次 —— 每帧新建 Surface 太浪费
         self.pause_overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
         self.pause_overlay.fill((0, 0, 0, 120))
+        # 退出确认要问"是/否"，字必须一眼看清 —— 所以幕布更暗
+        self.quit_overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        self.quit_overlay.fill((0, 0, 0, 205))
 
         self._create_fleet()
 
     def _check_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.stats.save_high_score()
-                sys.exit()
+                self._quit_game()
             elif event.type == pygame.MOUSEMOTION and self.state is State.UPGRADING:
                 # 鼠标滑到哪张卡上，高亮就跟到哪张
                 if self.upgrade_screen:
@@ -78,6 +85,35 @@ class AlienInvasion:
         if clicked and self.state.accepts_confirm:
             self._start_game()
 
+    def _quit_game(self):
+        """真正退出：存好最高分再走。
+
+        单独抽出来，是因为现在有**三个入口**都能退出：
+        点窗口的 X、按 ESC 后按 Y、以后可能加菜单里的 Exit。
+        三处各写一遍"先存盘再退出"，就会有一处忘了存。
+        """
+        self.stats.save_high_score()
+        sys.exit()
+
+    def _request_quit(self):
+        """按下 ESC：不直接退，先问一句（防误按）。
+
+        「来路」要记下来 —— 取消之后必须回到原来的状态，
+        而不是一律回到 PLAYING（在 Play 界面按 ESC 再取消，不该直接开局）。
+        """
+        if self.state is State.QUIT_CONFIRM:
+            return
+        self._state_before_quit = self.state
+        self.state = State.QUIT_CONFIRM
+        pygame.mouse.set_visible(True)
+
+    def _cancel_quit(self):
+        """按了"不"：退回按 ESC 之前的状态。"""
+        self.state = self._state_before_quit or State.READY
+        self._state_before_quit = None
+        if not self.state.accepts_confirm:
+            pygame.mouse.set_visible(False)
+
     def _start_game(self):
         """开一局新的。
 
@@ -94,7 +130,7 @@ class AlienInvasion:
         self.evolution_timer = 0
         self.sb.evolution_image = None
         self.state = State.PLAYING
-        self.sb.prep_score()
+        self.sb.prep_score_and_next()
         self.sb.prep_level()
         self.sb.prep_ships()
         self.sb.prep_shield()
@@ -221,7 +257,7 @@ class AlienInvasion:
                     # 【神族】灵能风暴：击落它时把周围一圈也炸掉
                     if self.settings.psionic_radius:
                         self._psionic_storm(alien)
-            self.sb.prep_score()
+            self.sb.prep_score_and_next()
             self.sb.check_high_score()
             self._check_upgrade_threshold()
         if not self.aliens:
@@ -272,6 +308,9 @@ class AlienInvasion:
             self.sb.show_game_over()
         elif self.state is State.UPGRADING and self.upgrade_screen:
             self.upgrade_screen.draw(self.screen, self.screen_rect)
+        elif self.state is State.QUIT_CONFIRM:
+            self.screen.blit(self.quit_overlay, (0, 0))
+            self.sb.show_quit_confirm()
 
         if self.state.shows_play_button:
             self.play_button.draw_button()
@@ -290,10 +329,16 @@ class AlienInvasion:
         """
         if self.state is not State.PLAYING:
             return
-        n = self._upgrade_count + 1
-        needed = self.settings.upgrade_score_base * n * (n + 1) // 2
-        if self.stats.score >= needed:
+        if self.stats.score >= self.next_upgrade_at():
             self._begin_upgrade()
+
+    def next_upgrade_at(self):
+        """下一次升级需要的累计分数（现算，不存任何状态）。
+
+        HUD 的"还差多少分"和弹窗判定读的是同一个方法 —— 只要它俩一致，
+        屏幕上的倒计时就不会和实际触发对不上。
+        """
+        return self.settings.upgrade_threshold(self._upgrade_count + 1)
 
     def _begin_upgrade(self):
         """抽出三张卡，切到 UPGRADING 状态。"""
@@ -314,6 +359,7 @@ class AlienInvasion:
         self._upgrade_count += 1
         self.sb.prep_upgrades()
         self.sb.prep_shield()
+        self.sb.prep_next_upgrade()  # 门槛变了，"还差多少分"也要重算
         if choice.is_fusion:
             self._announce_evolution(choice.title)
         self.upgrade_screen = None
@@ -332,10 +378,24 @@ class AlienInvasion:
         - A 键 / 空格：READY / GAME_OVER = 开始游戏，PLAYING = 开火
           （第 ④ 项做好后，UPGRADING 里它还表示"确认选中的升级"）
         - P 键 / Start：PLAYING = 暂停，PAUSED = 继续
+        - ESC / B：问"真的要退出吗"；在确认框里 ESC/N/B = 不退出，Y = 退出
 
         返回值：这一帧**状态是否发生了变化**。
         """
         state_before = self.state
+
+        # ---- 退出确认：这一屏只认"是 / 否"，别的键一律不理 ----
+        if self.state is State.QUIT_CONFIRM:
+            if self.input.yes_pressed:
+                self._quit_game()
+            elif self.input.escape_pressed or self.input.no_pressed:
+                self._cancel_quit()
+            return self.state is not state_before
+
+        # ESC 在任何界面都先弹确认，不直接退 —— 防误按
+        if self.input.escape_pressed:
+            self._request_quit()
+            return True
 
         if self.state is State.UPGRADING and self.upgrade_screen:
             # 三选一：方向键/十字键移动高亮，确认键/数字键选卡

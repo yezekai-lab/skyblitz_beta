@@ -374,6 +374,17 @@ class UpgradePool:
         """
         return all(self.level_of(key) >= level for key, level in upgrade.requires)
 
+    def has_upgrades_left(self):
+        """还有没有能拿的升级（拿满的、没解锁的都不算）。
+
+        ⚠️ 不要用 `available(1) == []` 来判断：`available()` 内部会抽随机数，
+        每帧调一次就会**白白消耗随机序列**，让"同一个种子复现同一局"失效。
+        "有没有"用纯查询判断，别用带随机的东西。
+        """
+        return any(
+            not self.is_maxed(u) and self.is_unlocked(u) for u in self.definitions
+        )
+
     def available(self, count=3):
         """从"能拿"的升级里按稀有度加权随机挑 `count` 条。
 

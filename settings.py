@@ -48,6 +48,15 @@ class Settings:
 
         self.initialize_dynamic_settings()
 
+    def upgrade_threshold(self, n):
+        """第 n 次升级需要多少【累计】分。
+
+        公式只写在这一处 —— 判定"该不该弹窗"（`_check_upgrade_threshold`）
+        和 HUD 显示"还差多少分"（`scoreboard.prep_next_upgrade`）都调它。
+        两处各抄一遍同一个公式，是"改了 A 忘了改 B"的经典来源。
+        """
+        return self.upgrade_score_base * n * (n + 1) // 2
+
     def initialize_dynamic_settings(self):
         """开新局时调用：把【会被升级改动】的数值全部复位。
 

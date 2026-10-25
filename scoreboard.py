@@ -21,6 +21,7 @@ class Scoreboard:
         self.prep_score()
         self.prep_high_score()
         self.prep_level()
+        self.prep_next_upgrade()
         self.prep_ships()
         self.prep_shield()
         self.prep_overlays()
@@ -36,10 +37,70 @@ class Scoreboard:
         self.score_rect.right = self.screen_rect.right - 20
         self.score_rect.top = 20
 
+    def prep_score_and_next(self):
+        """分数变了：分数图和"距下次升级"一起刷新。
+
+        为什么不在 `prep_score()` 里顺手调 `prep_next_upgrade()`：
+        "还差多少分"要排在【等级】下面，而构造对象时 `prep_level()` 还没跑
+        （等级又要排在分数下面，两者本来就是有先后的）。
+        与其在里面偷偷判断"排版好了没"，不如让调用方明确说清要刷新什么。
+        """
+        self.prep_score()
+        self.prep_next_upgrade()
+
+    def prep_next_upgrade(self):
+        """右上角显示"离下一次升级还差多少分"。
+
+        为什么值得加：升级门槛改成"越到后面越贵"之后，玩家在屏幕上
+        完全看不到进度，只能干等 —— 不知道自己还要打多久，节奏感是断的。
+
+        ⚠️ 这里**不存**"还差多少"这个值，每次现算：
+        它就是 `门槛 - 当前分`，存下来就等于多一份会和分数不同步的副本。
+        """
+        game = self.ai_game
+        pool = getattr(game, "upgrades", None)
+
+        if pool is None or not pool.has_upgrades_left():
+            # 全拿满了：没有"下一次"可言
+            text = "NEXT  MAXED"
+        else:
+            remaining = max(0, game.next_upgrade_at() - self.stats.score)
+            text = f"NEXT  {remaining:,}"
+
+        self.next_upgrade_image = self.small_font.render(text, True, (70, 80, 110))
+        self.next_upgrade_rect = self.next_upgrade_image.get_rect()
+        self.next_upgrade_rect.right = self.score_rect.right
+        self.next_upgrade_rect.top = self.level_rect.bottom + 8
+
+    def prep_next_upgrade(self):
+        """右上角显示"离下一次升级还差多少分"。
+
+        为什么值得加：升级门槛改成"越到后面越贵"之后，玩家在屏幕上
+        完全看不到进度，只能干等 —— 不知道自己还要打多久，节奏感是断的。
+
+        ⚠️ 这里**不存**"还差多少"这个值，每次现算：
+        它就是 `门槛 - 当前分`，存下来就等于多一份会和分数不同步的副本。
+        """
+        game = self.ai_game
+        pool = getattr(game, "upgrades", None)
+
+        if pool is None or not pool.has_upgrades_left():
+            # 全拿满了 / 还没初始化好：没有"下一次"可言
+            text = "NEXT  MAXED"
+        else:
+            remaining = max(0, game.next_upgrade_at() - self.stats.score)
+            text = f"NEXT  {remaining:,}"
+
+        self.next_upgrade_image = self.small_font.render(text, True, (70, 80, 110))
+        self.next_upgrade_rect = self.next_upgrade_image.get_rect()
+        self.next_upgrade_rect.right = self.score_rect.right
+        self.next_upgrade_rect.top = self.level_rect.bottom + 8
+
     def show_score(self):
         self.screen.blit(self.score_image, self.score_rect)
         self.screen.blit(self.high_score_image, self.high_score_rect)
         self.screen.blit(self.level_image, self.level_rect)
+        self.screen.blit(self.next_upgrade_image, self.next_upgrade_rect)
         if self.shield_image is not None:
             self.screen.blit(self.shield_image, self.shield_rect)
         self.ships.draw(self.screen)
@@ -150,7 +211,7 @@ class Scoreboard:
             self.ships.add(ship)
 
     def prep_overlays(self):
-        """预渲染暂停 / 结束提示。
+        """预渲染暂停 / 结束 / 退出确认的提示。
 
         `font.render()` 每次都要重新画一遍字形，挺贵的；提示文字又是固定的，
         所以建对象时渲染一次就够，别每帧做。
@@ -162,6 +223,14 @@ class Scoreboard:
         # "GAME OVER" 往上挪一点，免得和中间的 Play 按钮叠在一起
         self.game_over_rect.centery -= 80
 
+        self.quit_image, self.quit_rect = self._render_center_text("QUIT?   Y / N")
+        self.quit_hint_image = self.small_font.render(
+            "press Y to quit,  N or ESC to keep playing", True, (235, 235, 235)
+        )
+        self.quit_hint_rect = self.quit_hint_image.get_rect(
+            centerx=self.screen_rect.centerx, top=self.quit_rect.bottom + 16
+        )
+
     def _render_center_text(self, text):
         image = self.font.render(text, True, (255, 255, 255))
         return image, image.get_rect(center=self.screen_rect.center)
@@ -171,3 +240,7 @@ class Scoreboard:
 
     def show_game_over(self):
         self.screen.blit(self.game_over_image, self.game_over_rect)
+
+    def show_quit_confirm(self):
+        self.screen.blit(self.quit_image, self.quit_rect)
+        self.screen.blit(self.quit_hint_image, self.quit_hint_rect)

@@ -936,6 +936,165 @@ check(
     gl.stats.ship_left == fresh.ship_limit,
     f"(实际 {gl.stats.ship_left})",
 )
+
+print()
+print("=" * 62)
+print("⑳ HUD：距下次升级还差多少分")
+print("=" * 62)
+
+
+def press(game, key):
+    """模拟"按一下某个键"，走完整的输入 -> 意图 -> 状态解释。
+
+    直接调 `handle_event` 而不是 `pygame.event.post`：
+    测试之间不会互相残留事件，也不用担心事件队列被别人读走。
+    """
+    game.input.begin_frame()
+    game.input.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
+    return game._handle_state_input()
+
+
+gh = m.AlienInvasion()
+gh._start_game()
+
+check(
+    "开局：下一次升级要 400 分（等于 base × 1 × 2 ÷ 2）",
+    gh.next_upgrade_at() == gh.settings.upgrade_score_base,
+    f"(实际 {gh.next_upgrade_at()})",
+)
+check(
+    "开局分数为 0 时，正好差 400",
+    gh.next_upgrade_at() - gh.stats.score == 400,
+    f"(实际 {gh.next_upgrade_at() - gh.stats.score})",
+)
+
+# 分数一涨，"还差多少"必须跟着变小 —— 这就是 HUD 显示的那个数
+gh.stats.score = 250
+gh.sb.prep_score_and_next()
+check(
+    "分数 250 时还差 150",
+    gh.next_upgrade_at() - gh.stats.score == 150,
+    f"(实际 {gh.next_upgrade_at() - gh.stats.score})",
+)
+check("HUD 的 NEXT 图确实生成了", gh.sb.next_upgrade_image is not None)
+check(
+    "NEXT 排在等级下面，两者不重叠",
+    gh.sb.next_upgrade_rect.top > gh.sb.level_rect.bottom,
+    f"(NEXT top={gh.sb.next_upgrade_rect.top}, 等级 bottom={gh.sb.level_rect.bottom})",
+)
+
+# 升级拿过一次之后，门槛要翻到 1200（HUD 读的是同一个方法，所以自动跟着变）
+gh._upgrade_count = 1
+check(
+    "拿过 1 次升级后，下一次要 1200 分",
+    gh.next_upgrade_at() == 1200,
+    f"(实际 {gh.next_upgrade_at()})",
+)
+gh.stats.score = 1200
+remaining = max(0, gh.next_upgrade_at() - gh.stats.score)
+check("刚好够分时显示还差 0（不会出现负数）", remaining == 0, f"(实际 {remaining})")
+
+# 全部拿满：HUD 应该显示 MAXED，而不是一个永远到不了的数字
+gh._upgrade_count = 0
+for u in gh.upgrades.definitions:
+    for _ in range(u.max_level):
+        gh.upgrades.take(u.key)
+check(
+    "全部拿满后 has_upgrades_left() 为 False",
+    gh.upgrades.has_upgrades_left() is False,
+)
+gh.sb.prep_next_upgrade()
+check("全部拿满后 HUD 仍然能渲染（显示 MAXED）", gh.sb.next_upgrade_image is not None)
+
+# has_upgrades_left() 必须是纯查询：不能消耗随机数
+# （否则每帧调一次，同一个种子就跑不出同一局了）
+import random as _random
+
+gr = m.AlienInvasion()
+gr._start_game()
+_random.seed(4242)
+first = [u.key for u in gr.upgrades.available(3)]
+_random.seed(4242)
+for _ in range(50):
+    gr.upgrades.has_upgrades_left()  # 模拟"每帧都问一次"
+second = [u.key for u in gr.upgrades.available(3)]
+_random.seed()
+check(
+    "反复调用 has_upgrades_left() 不影响随机序列（同一颗种子抽出同一组牌）",
+    first == second,
+    f"({first} vs {second})",
+)
+
+print()
+print("=" * 62)
+print("㉑ ESC 退出确认（防误按）")
+print("=" * 62)
+
+gq = m.AlienInvasion()
+gq._start_game()
+quit_calls = []
+gq._quit_game = lambda: quit_calls.append(1)  # 别真的退，只记一笔
+
+check("开局是 PLAYING", gq.state is m.State.PLAYING)
+press(gq, pygame.K_ESCAPE)
+check("按 ESC 不会直接退出", quit_calls == [])
+check("按 ESC 进入 QUIT_CONFIRM", gq.state is m.State.QUIT_CONFIRM)
+check("确认屏要把世界冻住", gq.state.world_moves is False)
+
+# 更强的不变量：全部状态里"世界会动"的**必须恰好一个**。
+# 光测 QUIT_CONFIRM 一个状态，防不住"把 QUIT_CONFIRM 也加进会动的那一组"。
+# （改错的典型写法：return self in (PLAYING, QUIT_CONFIRM) → 这里会变成 2）
+moving = [s.name for s in m.State if s.world_moves]
+check(
+    "所有状态里，只有 PLAYING 让世界动",
+    moving == ["PLAYING"],
+    f"(实际会动的状态: {moving})",
+)
+
+# 在确认屏按开火键，不能顺带射出子弹、也不能改变状态
+before_bullets = len(gq.bullets)
+press(gq, pygame.K_SPACE)
+check(
+    "确认屏里按空格：状态不变、子弹不增",
+    gq.state is m.State.QUIT_CONFIRM and len(gq.bullets) == before_bullets,
+    f"(state={gq.state.name}, 子弹 {before_bullets} -> {len(gq.bullets)})",
+)
+
+press(gq, pygame.K_n)
+check("按 N 取消 -> 回到 PLAYING", gq.state is m.State.PLAYING)
+check("按 N 没有退出", quit_calls == [])
+
+press(gq, pygame.K_ESCAPE)
+press(gq, pygame.K_ESCAPE)
+check("确认屏里再按 ESC 也算取消 -> 回到 PLAYING", gq.state is m.State.PLAYING)
+
+press(gq, pygame.K_ESCAPE)
+press(gq, pygame.K_y)
+check("按 Y 才真的退出", quit_calls == [1], f"(调用 {len(quit_calls)} 次)")
+
+# 「来路」必须记住：在开始界面按 ESC 再取消，不能顺手开局
+gr2 = m.AlienInvasion()
+check("新对象停在 READY", gr2.state is m.State.READY)
+gr2._quit_game = lambda: quit_calls.append(1)
+press(gr2, pygame.K_ESCAPE)
+check("READY 下按 ESC 也要确认", gr2.state is m.State.QUIT_CONFIRM)
+press(gr2, pygame.K_n)
+check(
+    "取消后退回 READY（不是 PLAYING，也没开局）",
+    gr2.state is m.State.READY and gr2.stats.score == 0,
+    f"(state={gr2.state.name})",
+)
+check("取消不会残留「来路」", gr2._state_before_quit is None)
+
+# 从暂停界面进来，取消要回暂停，而不是回到游戏中
+gq._start_game()
+press(gq, pygame.K_p)
+check("按 P 暂停", gq.state is m.State.PAUSED)
+press(gq, pygame.K_ESCAPE)
+check("暂停时按 ESC 进入确认", gq.state is m.State.QUIT_CONFIRM)
+press(gq, pygame.K_n)
+check("取消后退回 PAUSED（世界仍是冻的）", gq.state is m.State.PAUSED)
+
 print()
 print("=" * 62)
 print(f"结果：{ok} 项通过, {fail} 项失败")
