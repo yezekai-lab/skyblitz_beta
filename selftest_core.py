@@ -1097,6 +1097,136 @@ check("取消后退回 PAUSED（世界仍是冻的）", gq.state is m.State.PAUS
 
 print()
 print("=" * 62)
+print("㉒ 视觉特效：开火闪光 / 受伤红边（只影响画面，不影响玩法）")
+print("=" * 62)
+
+fe = m.AlienInvasion()
+fe._start_game()
+fe.bullets.empty()
+
+check("开局没有闪光", fe.muzzle_flash == 0)
+check("开局没有红边", fe.hit_flash == 0)
+
+fe._fire_bullet()
+check(
+    "开火后闪光计时启动",
+    fe.muzzle_flash == fe.settings.muzzle_flash_frames,
+    f"(实际 {fe.muzzle_flash})",
+)
+
+# 关键：特效不能改任何玩法数值。这是**不变量**断言 ——
+# 加特效最容易顺手改到别的东西（比如为了"顺手"多给一颗子弹）。
+before = (fe.stats.score, fe.stats.ship_left, len(fe.bullets), fe.ship.rect.x)
+for _ in range(fe.settings.muzzle_flash_frames):
+    fe._update_effects()
+check(
+    "闪光结束后计时归零",
+    fe.muzzle_flash == 0,
+    f"(实际 {fe.muzzle_flash})",
+)
+check(
+    "闪光不会改分数/命数/子弹数/飞船位置",
+    before == (fe.stats.score, fe.stats.ship_left, len(fe.bullets), fe.ship.rect.x),
+    f"({before} -> {(fe.stats.score, fe.stats.ship_left, len(fe.bullets), fe.ship.rect.x)})",
+)
+# 再减也不会变成负数（否则 _draw_* 里的 ratio 会算出负 alpha）
+fe._update_effects()
+check("归零后继续递减不会变负", fe.muzzle_flash == 0, f"(实际 {fe.muzzle_flash})")
+
+fe.stats.ship_left = 3
+fe._ship_hit()
+check(
+    "被撞后红边计时启动",
+    fe.hit_flash == fe.settings.hit_flash_frames,
+    f"(实际 {fe.hit_flash})",
+)
+check(
+    "被撞确实扣了命（红边不影响原逻辑）",
+    fe.stats.ship_left == 2,
+    f"(实际 {fe.stats.ship_left})",
+)
+for _ in range(fe.settings.hit_flash_frames):
+    fe._update_effects()
+check("红边结束后计时归零", fe.hit_flash == 0, f"(实际 {fe.hit_flash})")
+
+# 有护盾时挡下也闪 —— 玩家需要知道"刚才那一下被吃掉了"
+fe.stats.shield = 1
+fe._ship_hit()
+check(
+    "护盾挡下时也会闪红（说明被撞到了）",
+    fe.hit_flash > 0 and fe.stats.ship_left == 2,
+    f"(flash={fe.hit_flash}, 命数={fe.stats.ship_left})",
+)
+fe.hit_flash = 0
+
+# 两个特效都要能真的画出来，且不崩
+fe._fire_bullet()
+fe._ship_hit()
+fe._update_screen()
+check("特效开启时整帧绘制不报错", True)
+check(
+    "绘制不会消耗计时器（计时只在 world 更新里推进）",
+    fe.muzzle_flash > 0,
+    f"(实际 {fe.muzzle_flash})",
+)
+
+print()
+print("=" * 62)
+print("㉓ PLAY 按钮：外观重做后，点击行为必须不变")
+print("=" * 62)
+
+gb = m.AlienInvasion()
+btn = gb.play_button
+
+check(
+    "按钮仍然居中",
+    btn.rect.center == gb.screen_rect.center,
+    f"({btn.rect.center} vs {gb.screen_rect.center})",
+)
+check(
+    "两张状态图都存在且尺寸相同",
+    btn.image_normal.get_size() == btn.image_hover.get_size(),
+    f"({btn.image_normal.get_size()} vs {btn.image_hover.get_size()})",
+)
+check(
+    "普通态和悬停态的样子不同（不是同一张图）",
+    pygame.image.tostring(btn.image_normal, "RGBA")
+    != pygame.image.tostring(btn.image_hover, "RGBA"),
+)
+
+check("默认不是悬停", btn.hover is False)
+check("鼠标移上去 -> 变为悬停", btn.update_hover(btn.rect.center) is True and btn.hover)
+check(
+    "已经在悬停时再移上去 -> 返回 False（无变化）",
+    btn.update_hover(btn.rect.center) is False,
+)
+check(
+    "鼠标移开 -> 退出悬停",
+    btn.update_hover((5, 5)) is True and btn.hover is False,
+)
+
+# ⚠️ 最要紧的一条：重做外观**不能**把"点哪里能开局"弄坏
+gb2 = m.AlienInvasion()
+check("开局停在 READY", gb2.state is m.State.READY)
+gb2._check_play_button(gb2.play_button.rect.center)
+check(
+    "点按钮中心仍然能开局（外观改动没有破坏点击判定）",
+    gb2.state is m.State.PLAYING,
+    f"(state={gb2.state.name})",
+)
+
+# 点在按钮外面（哪怕很近）不该开局
+gb3 = m.AlienInvasion()
+outside = (gb3.play_button.rect.left - 2, gb3.play_button.rect.top - 2)
+gb3._check_play_button(outside)
+check(
+    "点在按钮外 -> 不开局",
+    gb3.state is m.State.READY,
+    f"(实际 {gb3.state.name})",
+)
+
+print()
+print("=" * 62)
 print(f"结果：{ok} 项通过, {fail} 项失败")
 print("=" * 62)
 sys.exit(1 if fail else 0)

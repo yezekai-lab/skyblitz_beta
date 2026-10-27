@@ -54,6 +54,72 @@ def _canvas(width, height):
 
 
 # ---------------------------------------------------------------------------
+# 特效图：枪口闪光 / 受伤红边
+#
+# 两个都**只画一次**，之后靠 set_alpha() 调透明度来淡出 ——
+# 每帧重画一遍图形是没必要的开销（和 _image_cache 同一个道理）。
+# ---------------------------------------------------------------------------
+
+
+def make_muzzle_flash(width=66, height=84):
+    """开火时枪口往上喷的一团光。
+
+    三层叠出来的：
+        外层 橙、半透明（余晖）
+        中层 黄（火焰主体）
+        内层 近白（最亮的核心）
+    在 SRCALPHA 上 pygame.draw 是**直接写入**颜色（不做混合），
+    所以从大到小画，后画的自然盖住先画的，层层收窄就是渐变效果。
+    """
+    surface = _canvas(width, height)
+
+    # 三层，每层各自的宽高占比、颜色和透明度：
+    #   底下那团矮而宽（枪口的光球） / 中间那道高而窄（火舌） / 最里面一点（亮核）
+    # 如果三层都用同一个菱形比例，看起来就只是一圈圈同心环，不像火。
+    layers = (
+        (1.00, 0.42, (255, 120, 20, 150)),
+        (0.58, 1.00, (255, 190, 50, 235)),
+        (0.26, 0.60, (255, 255, 225, 255)),
+    )
+    cx = width / 2
+    for w_scale, h_scale, color in layers:
+        w = width * w_scale
+        h = height * h_scale
+        pts = (
+            (cx, height - h),
+            (cx + w / 2, height - h * 0.5),
+            (cx, height),
+            (cx - w / 2, height - h * 0.5),
+        )
+        pygame.draw.polygon(surface, color, pts)
+
+    return surface
+
+
+def make_hit_vignette(size, thickness=9, layers=26, color=(220, 50, 50)):
+    """受伤时屏幕四边泛红的一圈光。
+
+    做法：由外向内画一圈圈**越来越淡**的红色方框。
+    越靠中间透明度越低，所以是"边缘泛红"而不是"整个屏幕红"——
+    整屏红会把 HUD 和飞船一起盖住，看不清自己还剩下什么。
+    """
+    surface = pygame.Surface(size, pygame.SRCALPHA)
+    rect = surface.get_rect()
+
+    for i in range(layers):
+        alpha = int(165 * (1 - i / layers) ** 2)
+        inset = i * thickness * 2
+        pygame.draw.rect(
+            surface,
+            (*color, alpha),
+            rect.inflate(-inset, -inset),
+            width=thickness,
+        )
+
+    return surface
+
+
+# ---------------------------------------------------------------------------
 # 飞船：神族风格的三角楔形
 #   形状参考《星际争霸 2》的侦察机 / 凤凰：尖头、后掠翼、中央能量核
 # ---------------------------------------------------------------------------

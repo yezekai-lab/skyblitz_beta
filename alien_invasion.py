@@ -3,6 +3,8 @@ from time import sleep
 
 import random
 import sys
+
+import art
 from ship import Ship
 from settings import Settings
 from game_stats import GameStats
@@ -36,6 +38,10 @@ class AlienInvasion:
         self._upgrade_count = 0
         # 进化提示条还剩几帧（0 = 不显示）
         self.evolution_timer = 0
+        # 两个特效的倒计时（0 = 不显示）。**只在世界更新时递减**，
+        # 所以暂停时它们也会一起冻住 —— 和"暂停就是冻住世界"的规则一致。
+        self.muzzle_flash = 0  # 开火闪光
+        self.hit_flash = 0  # 受伤红边
         # 按 ESC 前处于哪个状态 —— 取消退出时要退回到它
         self._state_before_quit = None
 
@@ -55,16 +61,22 @@ class AlienInvasion:
         self.quit_overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
         self.quit_overlay.fill((0, 0, 0, 205))
 
+        # 特效图只画一次，之后靠 set_alpha() 淡出（不是每帧重画）
+        self.muzzle_flash_image = art.make_muzzle_flash()
+        self.hit_vignette = art.make_hit_vignette(self.screen.get_size())
+
         self._create_fleet()
 
     def _check_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self._quit_game()
-            elif event.type == pygame.MOUSEMOTION and self.state is State.UPGRADING:
+            elif event.type == pygame.MOUSEMOTION:
                 # 鼠标滑到哪张卡上，高亮就跟到哪张
-                if self.upgrade_screen:
+                if self.state is State.UPGRADING and self.upgrade_screen:
                     self.upgrade_screen.highlight_at(event.pos, margin=8)
+                elif self.state.shows_play_button:
+                    self.play_button.update_hover(event.pos)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self._handle_mouse_click(event.pos)
             else:
@@ -168,6 +180,10 @@ class AlienInvasion:
             offset = (i - (count - 1) / 2) * spacing
             bullet.rect.x += round(offset)
             self.bullets.add(bullet)
+
+        # 枪口闪一下。这是"给动作加反馈"最便宜的写法：
+        # 一个倒计时 + 一张预渲染的图，不需要动画帧序列。
+        self.muzzle_flash = self.settings.muzzle_flash_frames
 
     def _create_fleet(self):
         """摆一队外星人。
@@ -284,13 +300,44 @@ class AlienInvasion:
                 self.stats.score += victim.points
                 victim.kill()
 
+    def _update_effects(self):
+        """特效倒计时每帧减一。
+
+        放在**世界更新**里（而不是绘制里），这样暂停时特效也跟着冻住 ——
+        和"暂停 = 冻住世界"保持同一条规则。时间相关的状态只在一个地方推进，
+        就不会出现"暂停了红边还在闪"这种半冻结的怪状态。
+        """
+        if self.muzzle_flash > 0:
+            self.muzzle_flash -= 1
+        if self.hit_flash > 0:
+            self.hit_flash -= 1
+
+    def _draw_muzzle_flash(self):
+        """开火闪光：贴在飞船枪口上方，随剩余帧数淡出。"""
+        if self.muzzle_flash <= 0:
+            return
+        ratio = self.muzzle_flash / self.settings.muzzle_flash_frames
+        self.muzzle_flash_image.set_alpha(int(255 * ratio))
+        rect = self.muzzle_flash_image.get_rect(midbottom=self.ship.rect.midtop)
+        self.screen.blit(self.muzzle_flash_image, rect)
+
+    def _draw_hit_flash(self):
+        """受伤红边：越接近"刚被撞"越明显。"""
+        if self.hit_flash <= 0:
+            return
+        ratio = self.hit_flash / self.settings.hit_flash_frames
+        self.hit_vignette.set_alpha(int(255 * ratio))
+        self.screen.blit(self.hit_vignette, (0, 0))
+
     def _update_screen(self):
         self.screen.fill(self.settings.bg_color)
         self.ship.blitme()
         self.bullets.draw(self.screen)
         self.aliens.draw(self.screen)
+        self._draw_muzzle_flash()
 
         self.sb.show_score()
+        self._draw_hit_flash()
 
         # 进化提示条。倒计时放在这里，是因为 _update_screen() 是**唯一
         # 每帧必定被调用**的地方（暂停 / 选卡 / 结束时世界不动，但屏幕照样重画）。
@@ -448,6 +495,7 @@ class AlienInvasion:
                     self._fire_bullet()
                 self._update_aliens()
                 self._update_bullets()
+                self._update_effects()
 
             self._update_screen()
 
@@ -473,6 +521,9 @@ class AlienInvasion:
         self.settings.fleet_direction *= -1
 
     def _ship_hit(self):
+        # 受伤反馈：屏幕四边闪红（渐隐）。护盾挡下也算"被撞了"，所以放在最前面
+        self.hit_flash = self.settings.hit_flash_frames
+
         # 【神族】等离子护盾：有盾先碎盾，命数不动
         if self.stats.shield > 0:
             self.stats.shield -= 1
