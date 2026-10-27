@@ -1227,6 +1227,51 @@ check(
 
 print()
 print("=" * 62)
+print("㉔ 存档路径：跑 .py 和跑 exe 都要能在正确位置落盘")
+print("=" * 62)
+
+import game_stats as _gs
+import sys as _sys
+
+real_path = _gs.HIGH_SCORE_PATH
+check(
+    "直接跑 .py 时，存档在源码目录（和 game_stats.py 同目录）",
+    os.path.dirname(real_path) == os.path.dirname(os.path.abspath(_gs.__file__)),
+    f"(实际 {real_path})",
+)
+
+# 模拟 PyInstaller 打包后的环境：sys.frozen 存在 + sys.executable 指向 exe。
+# 这时绝不能再用 __file__ —— 它指向会被删掉的临时解压目录。
+old_frozen = getattr(_sys, "frozen", None)
+old_exe = _sys.executable
+try:
+    _sys.frozen = True  # type: ignore[attr-defined]
+    _sys.executable = os.path.join("C:\\", "某个目录", "游戏.exe")
+    frozen_dir = _gs._data_dir()
+finally:
+    if old_frozen is None:
+        del _sys.frozen  # type: ignore[attr-defined]
+    else:
+        _sys.frozen = old_frozen  # type: ignore[attr-defined]
+    _sys.executable = old_exe
+
+check(
+    "打包成 exe 后，存档改用 exe 所在目录（不是临时解压目录）",
+    frozen_dir == os.path.join("C:\\", "某个目录"),
+    f"(实际 {frozen_dir})",
+)
+check(
+    "两种情况下得到的是两个不同的目录（说明分支真的生效了）",
+    frozen_dir != os.path.dirname(os.path.abspath(_gs.__file__)),
+)
+check("测试结束后 sys 已恢复原样", getattr(_sys, "frozen", None) is old_frozen)
+check(
+    "恢复后 _data_dir() 又指回源码目录",
+    _gs._data_dir() == os.path.dirname(os.path.abspath(_gs.__file__)),
+)
+
+print()
+print("=" * 62)
 print(f"结果：{ok} 项通过, {fail} 项失败")
 print("=" * 62)
 sys.exit(1 if fail else 0)

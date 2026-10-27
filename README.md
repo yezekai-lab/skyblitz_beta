@@ -31,8 +31,8 @@
 需要 **Python 3.10+**（开发环境是 3.12.10）和 **pygame 2.6**。
 
 ```bash
-git clone <本仓库地址>
-cd alien_invasion
+git clone https://github.com/yezekai-lab/skyblitz_beta.git
+cd skyblitz_beta
 python -m pip install -r requirements.txt
 python alien_invasion.py
 ```
@@ -40,6 +40,22 @@ python alien_invasion.py
 Windows 下如果 `python` 打不开，试试 `py alien_invasion.py`。
 
 > 最高分会存在同目录的 `high_score.txt` 里（这个文件不进仓库）。
+
+### 不用 Python 的版本
+
+Release 里有一个 `外星人入侵.exe`（Windows 64 位），双击即玩。
+首次启动约 2~4 秒（单文件要先解压），存档存在 exe 旁边。
+
+### 自己打包 exe
+
+```bash
+python -m pip install pyinstaller
+python -m PyInstaller --onefile --windowed --name "外星人入侵" alien_invasion.py
+# 产物在 dist\
+```
+
+> 打包后存档路径会自动改用 exe 所在目录（`sys.frozen` 判断），
+> 否则 PyInstaller 的临时解压目录一关就整个删掉，最高分每局归零。
 
 ---
 
@@ -96,7 +112,7 @@ Windows 下如果 `python` 打不开，试试 `py alien_invasion.py`。
 无头自动化测试的原理和写法在 [测试指南.md](测试指南.md)。
 
 ```bash
-python selftest.py       # 306 项断言，全部无头运行，不弹窗口
+python selftest.py       # 311 项断言，全部无头运行，不弹窗口
 ```
 
 五套测试：核心回归 / 输入层 / 端到端主循环 / 升级池（含进化）/ 三选一界面。
