@@ -27,7 +27,7 @@ def pick_type():
 def image_for(color):
     """取（必要时才画，然后缓存）某个颜色的外星人图片。
 
-    低多边形素材是**代码画的**，所以不用“染色”那套。
+    低多边形素材是代码画的，所以不用“染色”那套。
     但还是加一层缓存：一队十几个外星人共用同一张 Surface，
     不必每造一个都重画一遍多边形。
 
@@ -54,7 +54,7 @@ class Alien(Sprite):
 
         self.x = float(self.rect.x)
 
-        # 【纵向位置】的真身是 base_y（自己那一行的基准线），rect.y 是由它算出来的。
+        # 纵向位置的真身是 base_y（自己那一行的基准线），rect.y 是由它算出来的。
         # 整队下移时改的是 base_y，不是 rect.y —— 这样"浮动"才不会把它冲掉。
         self.base_y = self.rect.y
 

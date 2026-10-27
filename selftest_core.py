@@ -168,7 +168,7 @@ check(
     f"(实际 {len(g.aliens)})",
 )
 check("等级 +1（记下打完了第几批）", g.stats.level == 2, f"(实际 {g.stats.level})")
-# 【难度固定】打完一批**不该**让外星人更快 —— 这是试玩后改的：
+# 难度固定：打完一批不该让外星人更快
 # 以前每批 ×1.1，玩家后期手忙脚乱。
 check(
     "难度不变：外星人速度仍是 1.0",
@@ -415,7 +415,7 @@ check(
 print()
 print("-- 计分：一枪两个不同分值的已经验过了，这里验『升级门槛越来越贵』--")
 
-# 【试玩反馈】难度固定之后，唯一还在变强的就是升级 —— 所以它必须越来越贵。
+# 难度固定之后，唯一还在变强的就是升级，所以门槛必须越来越贵。
 # 规则：第 n 次升级需要的累计分 = base × n × (n+1) ÷ 2
 #   n=1 → 400   n=2 → 1200   n=3 → 2400   n=4 → 4000
 # 断言用"关系"而不是写死 400/1200/2400：
@@ -478,7 +478,7 @@ print("=" * 62)
 def build_fleet(jitter):
     """按指定抖动值建一队，返回外星人列表。
 
-    注意把 skip_chance 关掉 —— 这一段测的是【布局】，不是数量。
+    注意把 skip_chance 关掉 —— 这一段测的是布局，不是数量。
     开着随机跳格的话，每个格子都可能空着，好多断言会时灵时不灵。
     """
     gg = m.AlienInvasion()
@@ -662,7 +662,7 @@ check(
 
 print()
 print("=" * 62)
-print("⑰ 机制类升级真的改变了【行为】，不只是改了数字")
+print("⑰ 机制类升级真的改变了行为，不只是改了数字")
 print("=" * 62)
 
 # ---- MULTI SHOT：一次发多发 ----
@@ -680,7 +680,7 @@ g7.settings.bullets_per_shot = 3
 g7._fire_bullet()
 check("升级后一次发 3 发", len(g7.bullets) == 3, f"(实际 {len(g7.bullets)})")
 xs = sorted(b.rect.centerx for b in g7.bullets)
-check("3 发是【左右排开】的，不是叠在一起", len(set(xs)) == 3, f"(x = {xs})")
+check("3 发是左右排开的，不是叠在一起", len(set(xs)) == 3, f"(x = {xs})")
 check(
     "以飞船中心为轴对称",
     abs((xs[0] + xs[2]) / 2 - g7.ship.rect.centerx) <= 1,
@@ -810,7 +810,7 @@ lives_before = gs.stats.ship_left
 gs._ship_hit()
 check("有盾时撞一下：盾 1 -> 0", gs.stats.shield == 0, f"(实际 {gs.stats.shield})")
 check(
-    "有盾时撞一下：【命数不变】",
+    "有盾时撞一下：命数不变",
     gs.stats.ship_left == lives_before,
     f"({lives_before} -> {gs.stats.ship_left})",
 )
@@ -843,7 +843,7 @@ def storm_scene(radius):
 
     neighbor = Alien(gg)
     neighbor.points = 100
-    # +70：贴着但【不重叠】（外星人宽 60）。
+    # +70：贴着但不重叠（外星人宽 60）。
     # 如果写成 +40 就会重叠，那一发子弹会直接打中两个 —— 就测不出风暴了。
     neighbor.place(target.rect.x + 70, target.rect.y)
     gg.aliens.add(neighbor)
@@ -874,7 +874,7 @@ check(
 # 反证：半径 = 0（没这个升级）时，邻居应该活着
 gg2, target2, neighbor2, far2 = storm_scene(0)
 check("半径=0 时，目标死了", target2 not in gg2.aliens)
-check("半径=0 时，邻居【活】着（证明上一条测的是风暴）", neighbor2 in gg2.aliens)
+check("半径=0 时，邻居活着（证明上一条测的是风暴）", neighbor2 in gg2.aliens)
 check("半径=0 时，分数只有 50", gg2.stats.score == 50, f"(实际 {gg2.stats.score})")
 
 # ---- 时间扭曲：整队变慢 ----
@@ -1041,7 +1041,7 @@ check("按 ESC 不会直接退出", quit_calls == [])
 check("按 ESC 进入 QUIT_CONFIRM", gq.state is m.State.QUIT_CONFIRM)
 check("确认屏要把世界冻住", gq.state.world_moves is False)
 
-# 更强的不变量：全部状态里"世界会动"的**必须恰好一个**。
+# 更强的不变量：全部状态里"世界会动"的必须恰好一个。
 # 光测 QUIT_CONFIRM 一个状态，防不住"把 QUIT_CONFIRM 也加进会动的那一组"。
 # （改错的典型写法：return self in (PLAYING, QUIT_CONFIRM) → 这里会变成 2）
 moving = [s.name for s in m.State if s.world_moves]
@@ -1114,7 +1114,7 @@ check(
     f"(实际 {fe.muzzle_flash})",
 )
 
-# 关键：特效不能改任何玩法数值。这是**不变量**断言 ——
+# 关键：特效不能改任何玩法数值。这是不变量断言 ——
 # 加特效最容易顺手改到别的东西（比如为了"顺手"多给一颗子弹）。
 before = (fe.stats.score, fe.stats.ship_left, len(fe.bullets), fe.ship.rect.x)
 for _ in range(fe.settings.muzzle_flash_frames):
@@ -1205,7 +1205,7 @@ check(
     btn.update_hover((5, 5)) is True and btn.hover is False,
 )
 
-# ⚠️ 最要紧的一条：重做外观**不能**把"点哪里能开局"弄坏
+# ⚠️ 最要紧的一条：重做外观不能把"点哪里能开局"弄坏
 gb2 = m.AlienInvasion()
 check("开局停在 READY", gb2.state is m.State.READY)
 gb2._check_play_button(gb2.play_button.rect.center)

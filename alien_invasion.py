@@ -30,7 +30,7 @@ class AlienInvasion:
         self.stats = GameStats(self)
         self.upgrades = UpgradePool(self)
 
-        # 阶段与升级计数要**先于 Scoreboard** 就位：
+        # 阶段与升级计数要先于 Scoreboard 就位：
         # Scoreboard 一建好就会渲染一次 HUD，而 HUD 里要读 _upgrade_count
         # （算"还差多少分升级"）。顺序反了就是 AttributeError。
         self.state = State.READY
@@ -38,7 +38,7 @@ class AlienInvasion:
         self._upgrade_count = 0
         # 进化提示条还剩几帧（0 = 不显示）
         self.evolution_timer = 0
-        # 两个特效的倒计时（0 = 不显示）。**只在世界更新时递减**，
+        # 两个特效的倒计时（0 = 不显示）。只在世界更新时递减，
         # 所以暂停时它们也会一起冻住 —— 和"暂停就是冻住世界"的规则一致。
         self.muzzle_flash = 0  # 开火闪光
         self.hit_flash = 0  # 受伤红边
@@ -51,7 +51,7 @@ class AlienInvasion:
         self.aliens = pygame.sprite.Group()
         self.play_button = Button(self, "Play")
 
-        # 帧率时钟。**没有它，游戏速度就取决于电脑有多快**
+        # 帧率时钟。没有它，游戏速度就取决于电脑有多快
         self.clock = pygame.time.Clock()
 
         # 暂停时压在画面上的半透明黑幕。只建一次 —— 每帧新建 Surface 太浪费
@@ -100,7 +100,7 @@ class AlienInvasion:
     def _quit_game(self):
         """真正退出：存好最高分再走。
 
-        单独抽出来，是因为现在有**三个入口**都能退出：
+        单独抽出来，是因为现在有三个入口都能退出：
         点窗口的 X、按 ESC 后按 Y、以后可能加菜单里的 Exit。
         三处各写一遍"先存盘再退出"，就会有一处忘了存。
         """
@@ -166,7 +166,7 @@ class AlienInvasion:
     def _fire_bullet(self):
         """发射。发几发、怎么排开，由 settings.bullets_per_shot 决定。
 
-        这是**机制类升级**改的地方：数值升级不会动这里，
+        这是机制类升级改的地方：数值升级不会动这里，
         但 MULTI SHOT 会让 count 从 1 变成 2、3 —— 走进另一个分支。
         """
         count = self.settings.bullets_per_shot
@@ -188,7 +188,7 @@ class AlienInvasion:
     def _create_fleet(self):
         """摆一队外星人。
 
-        思路：**先把格子算出来，再让每个外星人在自己的格子里随机挪一点**。
+        思路：先把格子算出来，再让每个外星人在自己的格子里随机挪一点。
         格子保证"排得下、不重叠"，随机挪动保证"看起来不像整齐的方格".
         两者分开，互不干扰 —— 这就是"有行列感但不整齐"。
 
@@ -219,10 +219,10 @@ class AlienInvasion:
 
         `room` 是这个格子里空着的宽度（格子宽 − 外星人宽）。
 
-        - `fleet_jitter = 0` → 偏移恒为 0 → 就是书本那种整齐方格
-        - `fleet_jitter = 1` → 最多偏 ±room/2 → 刚好贴住邻居，但**不会重叠**
+        - `fleet_jitter = 0` → 偏移恒为 0 → 回到整齐的方格布局
+        - `fleet_jitter = 1` → 最多偏 ±room/2 → 刚好贴住邻居，但不会重叠
 
-        ⚠️ 必须以 slot_base 为**中心**对称地偏，不能只往一个方向偏。
+        ⚠️ 必须以 slot_base 为中心对称地偏，不能只往一个方向偏。
         只往一个方向偏的话整个舰队会系统性地往右下平移，位置整体跑偏
         （离飞船越来越近）。写第一版时就踩了这个，被"舰队没往下跑"那条断言抓到。
         """
@@ -255,7 +255,7 @@ class AlienInvasion:
         self._check_bullet_alien_collisions()
 
     def _check_bullet_alien_collisions(self):
-        # 穿透：升级之后子弹打中外星人【自己不消失】，可以继续打下一个。
+        # 穿透：升级之后子弹打中外星人自己不消失，可以继续打下一个。
         # 这就是"机制升级"—— 同一次碰撞检测，因为一个开关走了另一条路。
         bullets_survive = self.settings.bullets_pierce
         collisions = pygame.sprite.groupcollide(
@@ -264,20 +264,20 @@ class AlienInvasion:
 
         if collisions:
             # groupcollide 返回的是 {子弹: [被它打中的外星人, ...]}
-            # 现在每个外星人自带分值，所以必须**逐个累加** ——
+            # 现在每个外星人自带分值，所以必须逐个累加 ——
             # 再像以前那样写 `alien_points * len(aliens)` 就错了
             # （那样一枪打中两个不同价的外星人，会按同一个价算两遍）
             for hit_aliens in collisions.values():
                 for alien in hit_aliens:
                     self.stats.score += alien.points
-                    # 【神族】灵能风暴：击落它时把周围一圈也炸掉
+                    # 神族灵能风暴：击落它时把周围一圈也炸掉
                     if self.settings.psionic_radius:
                         self._psionic_storm(alien)
             self.sb.prep_score_and_next()
             self.sb.check_high_score()
             self._check_upgrade_threshold()
         if not self.aliens:
-            # 【难度固定】只换一批新的，不加速、不涨分。
+            # 难度固定只换一批新的，不加速、不涨分。
             # 变化的是"升级要多少分"（见 _check_upgrade_threshold），
             # 而不是"外星人越来越难打"。
             self.bullets.empty()
@@ -287,9 +287,9 @@ class AlienInvasion:
             self.sb.prep_level()
 
     def _psionic_storm(self, center):
-        """【神族】灵能风暴：以被击落的外星人为中心，炸掉周围一圈。
+        """神族灵能风暴：以被击落的外星人为中心，炸掉周围一圈。
 
-        为什么可以边遍历边 kill：`Group.sprites()` 返回的是一个**列表副本**，
+        为什么可以边遍历边 kill：`Group.sprites()` 返回的是一个列表副本，
         不是内部存储本身 —— 所以遍历的时候删元素不会出问题。
         （如果直接遍历 Group 内部那个容器，就可能错过元素。这是老坑了。）
         """
@@ -303,7 +303,7 @@ class AlienInvasion:
     def _update_effects(self):
         """特效倒计时每帧减一。
 
-        放在**世界更新**里（而不是绘制里），这样暂停时特效也跟着冻住 ——
+        放在世界更新里（而不是绘制里），这样暂停时特效也跟着冻住 ——
         和"暂停 = 冻住世界"保持同一条规则。时间相关的状态只在一个地方推进，
         就不会出现"暂停了红边还在闪"这种半冻结的怪状态。
         """
@@ -339,8 +339,8 @@ class AlienInvasion:
         self.sb.show_score()
         self._draw_hit_flash()
 
-        # 进化提示条。倒计时放在这里，是因为 _update_screen() 是**唯一
-        # 每帧必定被调用**的地方（暂停 / 选卡 / 结束时世界不动，但屏幕照样重画）。
+        # 进化提示条。倒计时放在这里，是因为 _update_screen() 是唯一
+        # 每帧必定被调用的地方（暂停 / 选卡 / 结束时世界不动，但屏幕照样重画）。
         if self.evolution_timer > 0:
             self.sb.show_evolution()
             self.evolution_timer -= 1
@@ -369,7 +369,7 @@ class AlienInvasion:
         第 n 次升级需要 score >= base × n × (n+1) ÷ 2
             n=1 → 400    n=2 → 1200    n=3 → 2400    n=4 → 4000
         意思是：第 1 次差 400 分，第 2 次再差 800 分，第 3 次再差 1200 分……
-        **每一次都比上一次更贵**，所以升级会越来越慢 —— 这是"难度固定"
+        每一次都比上一次更贵，所以升级会越来越慢 —— 这是"难度固定"
         之后唯一还在变强的东西，也是拉长一局的主要因素。
 
         不在阈值里存"下次多少分"，而是用计数现算 —— 少一份状态就少一类 bug。
@@ -419,15 +419,15 @@ class AlienInvasion:
         self.evolution_timer = self.settings.evolution_banner_frames
 
     def _handle_state_input(self):
-        """把输入**按当前状态**解释成动作。
+        """把输入按当前状态解释成动作。
 
         同一个按键在不同状态下含义不同，这正是状态机存在的理由：
         - A 键 / 空格：READY / GAME_OVER = 开始游戏，PLAYING = 开火
-          （第 ④ 项做好后，UPGRADING 里它还表示"确认选中的升级"）
+          （在 UPGRADING 状态下它还表示"确认选中的升级"）
         - P 键 / Start：PLAYING = 暂停，PAUSED = 继续
         - ESC / B：问"真的要退出吗"；在确认框里 ESC/N/B = 不退出，Y = 退出
 
-        返回值：这一帧**状态是否发生了变化**。
+        返回值：这一帧状态是否发生了变化。
         """
         state_before = self.state
 
@@ -480,12 +480,11 @@ class AlienInvasion:
             # ③ 按当前状态解释输入
             state_changed = self._handle_state_input()
 
-            # ④ 状态切换的那一帧**只重画，不跑游戏逻辑**。
+            # ④ 状态切换的那一帧只重画，不跑游戏逻辑。
             #
-            #    这一条是必须的：A 键同时是「确认」和「开火」，如果按 A 开始
-            #    游戏的同一帧又跑一遍世界更新，就会立刻射出一发子弹。
-            #    原理是"同一个输入被两个状态各解释了一遍" —— 加了这个判断之后，
-            #    一次状态切换就是原子的，那个按键只会被旧状态消费掉。
+            #    A 键同时是「确认」和「开火」（空格也一样）。如果按 A 开始游戏的
+            #    同一帧又跑一遍世界更新，就会立刻射出一发子弹 —— 同一个输入被
+            #    新旧两个状态各解释了一次。加了这个判断，一次状态切换才是原子的。
             if not state_changed and self.state.world_moves:
                 self.ship.update(self.input.read_direction())
                 # 单发（fire_pressed，按下那一刻） vs 按住连发（auto_fire 升级后）
@@ -524,7 +523,7 @@ class AlienInvasion:
         # 受伤反馈：屏幕四边闪红（渐隐）。护盾挡下也算"被撞了"，所以放在最前面
         self.hit_flash = self.settings.hit_flash_frames
 
-        # 【神族】等离子护盾：有盾先碎盾，命数不动
+        # 神族等离子护盾：有盾先碎盾，命数不动
         if self.stats.shield > 0:
             self.stats.shield -= 1
             self.sb.prep_shield()
