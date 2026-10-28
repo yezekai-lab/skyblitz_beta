@@ -112,7 +112,7 @@ python -m PyInstaller --onefile --windowed --name "外星人入侵" alien_invasi
 无头自动化测试的原理和写法在 [测试指南.md](测试指南.md)。
 
 ```bash
-python selftest.py       # 311 项断言，全部无头运行，不弹窗口
+python selftest.py       # 324 项断言，全部无头运行，不弹窗口
 ```
 
 五套测试：核心回归 / 输入层 / 端到端主循环 / 升级池（含进化）/ 三选一界面。

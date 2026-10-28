@@ -57,6 +57,12 @@ class InputManager:
         # 手柄同理：按钮按着没
         self._pad_fire = False
 
+        # 关掉 SDL 的文本输入。看着和游戏无关，其实是必需的：
+        # 中文/日文输入法一旦激活，字母键（P / Y / N）会被输入法截走，
+        # 窗口根本收不到 KEYDOWN —— 表现就是"按 P 没有任何反应"，
+        # 而空格、ESC、方向键却照常。本游戏不输入文字，直接关掉即可。
+        pygame.key.stop_text_input()
+
         self._open_joystick()
 
     @property
@@ -111,6 +117,11 @@ class InputManager:
             self._open_joystick()
         elif event.type == pygame.JOYDEVICEREMOVED:
             self.joystick = None
+        elif event.type == pygame.WINDOWFOCUSLOST:
+            # 窗口失焦时把"按着"的状态全部清掉。
+            # 否则按住右键 Alt+Tab 切走，KEYUP 永远不会来，切回来飞船会
+            # 一直朝一个方向飘 —— 看起来就像"按键卡住了"。
+            self._release_all_held()
 
     def _handle_keydown(self, key):
         if key == pygame.K_RIGHT:
@@ -148,6 +159,17 @@ class InputManager:
             self._key_left = False
         elif key == pygame.K_SPACE:
             self._key_fire = False
+
+    def _release_all_held(self):
+        """把"当前按着"的状态全部清空（失焦、或收到未知重置时用）。
+
+        注意只清"状态类"的标志（按着没），不清"边沿类"的（刚按下）——
+        后者本来每帧就清，清它没有意义，还可能吃掉一次正常的按键。
+        """
+        self._key_left = False
+        self._key_right = False
+        self._key_fire = False
+        self._pad_fire = False
 
     def _handle_joybuttondown(self, button):
         if button == PAD_FIRE_BUTTON:

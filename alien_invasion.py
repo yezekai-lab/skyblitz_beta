@@ -79,6 +79,12 @@ class AlienInvasion:
                     self.play_button.update_hover(event.pos)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self._handle_mouse_click(event.pos)
+            elif event.type == pygame.WINDOWFOCUSLOST:
+                # 切到别的窗口时自动暂停，否则回来时可能已经被打死了。
+                # 同时交给输入层，让它把"按着"的键松开（KEYUP 不会再来）。
+                if self.state is State.PLAYING:
+                    self._toggle_pause()
+                self.input.handle_event(event)
             else:
                 # 键盘、手柄按钮、手柄插拔 …… 一律交给输入层翻译成"意图"
                 self.input.handle_event(event)

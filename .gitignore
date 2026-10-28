@@ -20,3 +20,6 @@ Thumbs.db
 build/
 dist/
 *.spec
+
+# 生成的 Word 文档（交源码时不需要）
+*.docx

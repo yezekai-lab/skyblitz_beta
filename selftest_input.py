@@ -287,6 +287,90 @@ g2.input.handle_event(ev(pygame.KEYDOWN, key=pygame.K_p))
 g2._handle_state_input()
 check("再按 P 恢复", g2.state is State.PLAYING)
 
+print()
+print("=" * 64)
+print("输入法兼容：字母键必须能到达游戏")
+print("=" * 64)
+
+# 真实踩到的 bug：中文输入法（微软拼音）处于中文状态时，字母键会被输入法
+# 截走，窗口收不到 KEYDOWN —— 表现就是"按 P 暂停没反应"，而空格/ESC 正常。
+# 修法是启动时关掉 SDL 的文本输入（本游戏不需要输入文字）。
+
+from unittest import mock
+
+with mock.patch.object(pygame.key, "stop_text_input") as mocked:
+    InputManager()
+check(
+    "创建输入层时会关闭文本输入（否则字母键被输入法吃掉）",
+    mocked.called,
+    f"(调用 {mocked.call_count} 次)",
+)
+
+# 关掉之后，字母键要能被正确翻译成意图
+g3 = m.AlienInvasion()
+g3._start_game()
+for key, attr in (
+    (pygame.K_p, "pause_pressed"),
+    (pygame.K_y, "yes_pressed"),
+    (pygame.K_n, "no_pressed"),
+    (pygame.K_ESCAPE, "escape_pressed"),
+):
+    g3.input.begin_frame()
+    g3.input.handle_event(ev(pygame.KEYDOWN, key=key))
+    check(
+        f"按键 {pygame.key.name(key).upper()} 能翻译成 {attr}",
+        getattr(g3.input, attr) is True,
+    )
+
+print()
+print("=" * 64)
+print("焦点丢失：正在按着的键必须松开")
+print("=" * 64)
+
+# 按住方向键时 Alt+Tab 切走，KEYUP 不会再来 —— 不清空的话
+# 切回来飞船会一直朝一个方向飘，看起来像"按键卡住了"。
+g4 = m.AlienInvasion()
+g4._start_game()
+g4.input.begin_frame()
+g4.input.handle_event(ev(pygame.KEYDOWN, key=pygame.K_RIGHT))
+g4.input.handle_event(ev(pygame.KEYDOWN, key=pygame.K_SPACE))
+check("按住右键时方向为 +1", g4.input.read_direction() == 1.0)
+check("按住空格时 fire_held 为真", g4.input.fire_held is True)
+
+g4.input.handle_event(ev(pygame.WINDOWFOCUSLOST))
+check(
+    "焦点丢失后方向归零（不会一直往右飘）",
+    g4.input.read_direction() == 0.0,
+    f"(实际 {g4.input.read_direction()})",
+)
+check("焦点丢失后不再算按住开火", g4.input.fire_held is False)
+
+# 切走窗口要自动暂停，否则回来时可能已经被打死了
+g4._start_game()
+check("开局在 PLAYING", g4.state is State.PLAYING)
+pygame.event.post(ev(pygame.WINDOWFOCUSLOST))
+g4.input.begin_frame()
+g4._check_events()
+g4._handle_state_input()
+check(
+    "窗口失焦时自动暂停",
+    g4.state is State.PAUSED,
+    f"(实际 {g4.state.name})",
+)
+check("自动暂停后世界冻住", g4.state.world_moves is False)
+
+# 但在开始界面失焦不该有任何反应（本来就没在玩）
+g5 = m.AlienInvasion()
+pygame.event.post(ev(pygame.WINDOWFOCUSLOST))
+g5.input.begin_frame()
+g5._check_events()
+g5._handle_state_input()
+check(
+    "READY 状态下失焦不会误进暂停",
+    g5.state is State.READY,
+    f"(实际 {g5.state.name})",
+)
+
 pygame.quit()
 print()
 print("=" * 64)
